@@ -1,5 +1,7 @@
 <template>
     <div>
+        <Head :title="title" />
+        
         <div class="min-h-screen bg-gray-100">
             <Navigation />
 

@@ -155,13 +155,13 @@
                         <div class="space-y-4">
                             <div v-for="platform in platformStatus" :key="platform.name" class="flex items-center justify-between border-b pb-4 last:border-0">
                                 <div class="flex items-center">
-                                    <div :class="platformClasses(platform.name)" class="w-8 h-8 rounded-full flex items-center justify-center">
-                                        <component :is="platformIcon(platform.name)" class="w-4 h-4" />
+                                    <div :class="platformClasses(platform.name.toLowerCase())" class="w-8 h-8 rounded-full flex items-center justify-center">
+                                        <i :class="platformIcon(platform.name.toLowerCase())" class="text-lg"></i>
                                     </div>
                                     <div class="ml-3">
                                         <div class="text-sm font-medium">{{ platform.name }}</div>
                                         <div class="text-xs text-gray-500">
-                                            {{ platform.connected ? 'Connected' : 'Not Connected' }}
+                                            {{ platform.connected ? platform.username : 'Not Connected' }}
                                         </div>
                                     </div>
                                 </div>
@@ -180,14 +180,6 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import {
-    Facebook,
-    Instagram,
-    Twitter,
-    Linkedin,
-    Youtube,
-    Music2 // For TikTok
-} from 'lucide-vue-next';
 
 const props = defineProps({
     stats: Object,
@@ -213,6 +205,18 @@ const platformClasses = (platform) => {
     return classes[platform.toLowerCase()] || 'bg-gray-100 text-gray-800';
 };
 
+const platformIcon = (platform) => {
+    const icons = {
+        facebook: 'fab fa-facebook',
+        instagram: 'fab fa-instagram',
+        twitter: 'fab fa-twitter',
+        linkedin: 'fab fa-linkedin',
+        tiktok: 'fab fa-tiktok',
+        youtube: 'fab fa-youtube',
+    };
+    return icons[platform.toLowerCase()] || 'fas fa-globe';
+};
+
 const statusClasses = (status) => {
     const classes = {
         published: 'bg-green-100 text-green-800',
@@ -231,16 +235,5 @@ const logTypeClasses = (type) => {
         success: 'bg-green-500',
     };
     return classes[type] || 'bg-gray-500';
-};
-
-const platformIcon = (platform) => {
-    return {
-        facebook: Facebook,
-        instagram: Instagram,
-        twitter: Twitter,
-        linkedin: Linkedin,
-        tiktok: Music2,
-        youtube: Youtube,
-    }[platform.toLowerCase()];
 };
 </script>
