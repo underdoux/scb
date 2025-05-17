@@ -1,26 +1,31 @@
+<template>
+    <input
+        ref="input"
+        v-model="model"
+        class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full text-sm"
+        :class="{ 'border-red-500 focus:border-red-500 focus:ring-red-500': error }"
+        v-bind="$attrs"
+    />
+</template>
+
 <script setup>
 import { onMounted, ref } from 'vue';
 
-const model = defineModel({
-    type: String,
-    required: true,
-});
-
+const model = defineModel();
 const input = ref(null);
 
-onMounted(() => {
-    if (input.value.hasAttribute('autofocus')) {
-        input.value.focus();
+defineProps({
+    error: {
+        type: [String, Boolean],
+        default: false
     }
 });
 
-defineExpose({ focus: () => input.value.focus() });
-</script>
+onMounted(() => {
+    if (input.value?.hasAttribute('autofocus')) {
+        input.value?.focus();
+    }
+});
 
-<template>
-    <input
-        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-        v-model="model"
-        ref="input"
-    />
-</template>
+defineExpose({ focus: () => input.value?.focus() });
+</script>
