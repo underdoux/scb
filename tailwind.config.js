@@ -12,11 +12,25 @@ export default {
 
     theme: {
         extend: {
+            colors: {
+                background: {
+                    primary: '#020817',
+                    secondary: '#0B0F1A',
+                },
+                border: {
+                    primary: '#1f2937', // gray-800
+                },
+            },
             fontFamily: {
-                sans: ['Figtree', ...defaultTheme.fontFamily.sans],
+                sans: ['Inter', ...defaultTheme.fontFamily.sans],
+            },
+            ringColor: {
+                'blue-500/20': 'rgb(59 130 246 / 0.2)',
             },
         },
     },
 
-    plugins: [forms],
+    plugins: [forms({
+        strategy: 'class',
+    })],
 };

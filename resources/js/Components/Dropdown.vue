@@ -12,7 +12,7 @@ const props = defineProps({
     },
     contentClasses: {
         type: String,
-        default: 'py-1 bg-[#0B0F1A] border border-gray-800 text-white',
+        default: 'py-2 bg-background-secondary border border-border-primary text-white divide-y divide-border-primary',
     },
 });
 
@@ -53,27 +53,27 @@ const open = ref(false);
         <!-- Full Screen Dropdown Overlay -->
         <div
             v-show="open"
-            class="fixed inset-0 z-40"
+            class="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
             @click="open = false"
         ></div>
 
         <Transition
             enter-active-class="transition ease-out duration-200"
-            enter-from-class="opacity-0 scale-95"
-            enter-to-class="opacity-100 scale-100"
-            leave-active-class="transition ease-in duration-75"
-            leave-from-class="opacity-100 scale-100"
-            leave-to-class="opacity-0 scale-95"
+            enter-from-class="opacity-0 translate-y-1 scale-95"
+            enter-to-class="opacity-100 translate-y-0 scale-100"
+            leave-active-class="transition ease-in duration-150"
+            leave-from-class="opacity-100 translate-y-0 scale-100"
+            leave-to-class="opacity-0 translate-y-1 scale-95"
         >
             <div
                 v-show="open"
-                class="absolute z-50 mt-2 rounded-lg shadow-lg"
+                class="absolute z-50 mt-2 rounded-lg shadow-lg shadow-black/10"
                 :class="[widthClass, alignmentClasses]"
                 style="display: none"
                 @click="open = false"
             >
                 <div
-                    class="rounded-lg ring-1 ring-gray-800"
+                    class="overflow-hidden rounded-lg ring-1 ring-black/5"
                     :class="contentClasses"
                 >
                     <slot name="content" />
