@@ -62,6 +62,8 @@ import {
     YoutubeIcon
 } from '@/Components/Icons';
 
+defineEmits(['connect', 'disconnect']);
+
 const props = defineProps({
     platform: {
         type: String,
