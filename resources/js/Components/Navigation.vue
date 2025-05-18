@@ -1,5 +1,6 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
+import { usePage, router } from '@inertiajs/vue3';
 import { Link } from '@inertiajs/vue3';
 import {
     Menu,
@@ -25,15 +26,27 @@ import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
 
 const showingNavigationDropdown = ref(false);
 const searchQuery = ref('');
+const page = usePage();
 
-const navigation = [
-    { name: 'Dashboard', href: route('dashboard'), icon: LayoutDashboard },
-    { name: 'Posts', href: route('posts.index'), icon: FileText },
-    { name: 'Social Accounts', href: route('social-accounts.index'), icon: Share2 },
-    { name: 'Analytics', href: route('analytics.index'), icon: BarChart2 },
-    { name: 'Logs', href: route('logs.index'), icon: ClipboardList },
-    { name: 'Settings', href: route('settings.index'), icon: Settings }
-];
+const navigation = computed(() => {
+    const baseNav = [
+        { name: 'Dashboard', href: route('dashboard'), icon: LayoutDashboard },
+        { name: 'Posts', href: route('posts.index'), icon: FileText },
+        { name: 'Social Accounts', href: route('social-accounts.index'), icon: Share2 },
+        { name: 'Analytics', href: route('analytics.index'), icon: BarChart2 },
+        { name: 'Logs', href: route('logs.index'), icon: ClipboardList },
+        { name: 'Settings', href: route('settings.index'), icon: Settings }
+    ];
+
+    if (page.props.auth.user?.is_admin) {
+        baseNav.push(
+            { name: 'Admin Users', href: route('admin.users'), icon: User },
+            { name: 'Admin Settings', href: route('admin.settings'), icon: Settings }
+        );
+    }
+
+    return baseNav;
+});
 </script>
 
 <template>
@@ -86,7 +99,7 @@ const navigation = [
                         <Dropdown align="right" width="48">
                             <template #trigger>
                                 <button class="flex items-center gap-2 rounded-lg border border-border-primary bg-background-primary px-3 py-2 text-sm font-medium text-white transition-colors hover:border-gray-700">
-                                    <span>{{ $page.props.auth.user.name }}</span>
+                                    <span>{{ page.props.auth.user.name }}</span>
                                     <ChevronDown class="h-4 w-4" />
                                 </button>
                             </template>
@@ -147,7 +160,7 @@ const navigation = [
                     <template v-for="item in navigation" :key="item.name">
                         <ResponsiveNavLink
                             :href="item.href"
-                            :active="route().current(item.name.toLowerCase())"
+                            :active="route().current(item.href.split('.')[1])"
                             class="flex items-center gap-3"
                         >
                             <component :is="item.icon" class="h-5 w-5" />
