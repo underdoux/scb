@@ -105,7 +105,7 @@ class OAuthService {
         }
     }
 
-    public function getToken(int $userId, string $platform): ?array {
+    public function getToken(int $userId, string $platform, bool $attemptRefresh = true): ?array {
         $sql = "SELECT * FROM oauth_tokens WHERE user_id = :user_id AND platform = :platform";
         
         try {
@@ -113,8 +113,15 @@ class OAuthService {
             $stmt->execute([':user_id' => $userId, ':platform' => $platform]);
             $token = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            if ($token && $this->isTokenExpired($token)) {
-                return $this->refreshToken($userId, $platform);
+            if (!$token) {
+                return null;
+            }
+
+            if ($attemptRefresh && $this->isTokenExpired($token)) {
+                if ($token['refresh_token']) {
+                    return $this->refreshToken($userId, $platform);
+                }
+                return null;
             }
 
             return $token;
@@ -145,7 +152,7 @@ class OAuthService {
     }
 
     public function refreshToken(int $userId, string $platform): ?array {
-        $token = $this->getToken($userId, $platform);
+        $token = $this->getToken($userId, $platform, false);
         if (!$token || !$token['refresh_token']) {
             return null;
         }

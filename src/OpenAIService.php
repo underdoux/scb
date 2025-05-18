@@ -2,32 +2,81 @@
 class OpenAIService {
     private $config;
     private $apiKey;
+    private $cacheService;
 
     public function __construct() {
         $this->config = require_once __DIR__ . '/../config/openai_config.php';
         $this->apiKey = $this->config['api_key'];
+        $this->cacheService = new CacheService();
         
         if (empty($this->apiKey)) {
             throw new Exception('OpenAI API key is not configured');
         }
     }
 
-    public function generateSocialContent(string $topic): array {
+    private function getCacheKey(array $params): array {
+        return [
+            'topic' => $params['topic'],
+            'contentType' => $params['contentType'],
+            'length' => $params['length'],
+            'tone' => $params['tone']
+        ];
+    }
+
+    public function generateSocialContent(string $topic, string $contentType = 'engaging', string $length = 'medium', string $tone = 'professional', int $userId = null): array {
+        // Check rate limit if userId is provided
+        if ($userId !== null) {
+            if (!$this->cacheService->checkRateLimit($userId)) {
+                throw new Exception('Rate limit exceeded. Please try again in a minute.');
+            }
+        }
+
+        // Try to get cached content
+        $cacheKey = $this->getCacheKey([
+            'topic' => $topic,
+            'contentType' => $contentType,
+            'length' => $length,
+            'tone' => $tone
+        ]);
+
+        $cachedContent = $this->cacheService->getCachedContent($cacheKey);
+        if ($cachedContent !== null) {
+            return $cachedContent;
+        }
+        // Define character limits based on length parameter
+        $charLimits = [
+            'short' => 100,
+            'medium' => 200,
+            'long' => 280
+        ];
+        
+        $charLimit = $charLimits[$length] ?? 200;
+        
+        // Create system message based on content type and tone
+        $systemPrompt = "You are a social media expert specializing in {$contentType} content with a {$tone} tone. ";
+        $systemPrompt .= "Generate engaging content that resonates with the audience while maintaining brand voice and message clarity.";
+        
+        // Create user prompt with specific instructions
+        $userPrompt = "Create {$contentType} social media content about: {$topic}\n";
+        $userPrompt .= "Use a {$tone} tone and keep the caption within {$charLimit} characters.\n\n";
+        $userPrompt .= "Include:\n";
+        $userPrompt .= "1. A compelling caption (max {$charLimit} characters)\n";
+        $userPrompt .= "2. 5-7 relevant hashtags\n";
+        $userPrompt .= "3. 2 alternative caption variations (also max {$charLimit} characters each)\n";
+        $userPrompt .= "Format as JSON with keys: caption, hashtags (array), variations (array)";
+        
         $messages = [
             [
                 'role' => 'system',
-                'content' => 'You are a social media expert. Generate engaging content with a caption, relevant hashtags, and variations. Format the response as JSON.'
+                'content' => $systemPrompt
             ],
             [
                 'role' => 'user',
-                'content' => "Create social media content for the topic: {$topic}. Include:
-                1. A compelling caption (max 280 characters)
-                2. 5-7 relevant hashtags
-                3. 2 alternative caption variations
-                Format as JSON with keys: caption, hashtags (array), variations (array)"
+                'content' => $userPrompt
             ]
         ];
 
+        // Generate new content if not in cache
         $response = $this->makeRequest([
             'model' => $this->config['model'],
             'messages' => $messages,
@@ -36,7 +85,12 @@ class OpenAIService {
             'response_format' => ['type' => 'json_object']
         ]);
 
-        return json_decode($response, true);
+        $content = json_decode($response, true);
+        
+        // Cache the generated content
+        $this->cacheService->cacheContent($cacheKey, $content);
+        
+        return $content;
     }
 
     private function makeRequest(array $data): string {

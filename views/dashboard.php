@@ -32,6 +32,7 @@ foreach ($platforms as $platform) {
         <nav>
             <a href="/">Home</a>
             <a href="/about">About</a>
+            <a href="/generate-content-ui">Generate Content</a>
             <?php if ($isUserAdmin): ?>
                 <a href="/admin/dashboard">Admin Dashboard</a>
             <?php endif; ?>

@@ -63,6 +63,11 @@ function routeRequest() {
             handleApiTest();
             break;
 
+        case '/generate-content-ui':
+            requireAuth();
+            require_once __DIR__ . '/../views/generate_content.php';
+            break;
+
         // OAuth Routes
         case '/oauth/facebook/login':
             requireAuth();
@@ -286,6 +291,9 @@ function handleContentGeneration() {
 
     $data = json_decode(file_get_contents('php://input'), true);
     $topic = $data['topic'] ?? '';
+    $contentType = $data['contentType'] ?? 'engaging';
+    $length = $data['length'] ?? 'medium';
+    $tone = $data['tone'] ?? 'professional';
 
     if (empty($topic)) {
         http_response_code(400);
@@ -293,10 +301,47 @@ function handleContentGeneration() {
         exit();
     }
 
+    // Validate content type
+    $validContentTypes = ['promotional', 'informative', 'engaging'];
+    if (!in_array($contentType, $validContentTypes)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid content type']);
+        exit();
+    }
+
+    // Validate length
+    $validLengths = ['short', 'medium', 'long'];
+    if (!in_array($length, $validLengths)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid length']);
+        exit();
+    }
+
+    // Validate tone
+    $validTones = ['professional', 'casual', 'humorous'];
+    if (!in_array($tone, $validTones)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid tone']);
+        exit();
+    }
+
     try {
         $openAIService = new OpenAIService();
-        $content = $openAIService->generateSocialContent($topic);
-        echo json_encode($content);
+        $userId = $_SESSION['user_id'] ?? null;
+        
+        // Get remaining requests for rate limit info
+        $cacheService = new CacheService();
+        $remainingRequests = $userId ? $cacheService->getRemainingRequests($userId) : null;
+        
+        $content = $openAIService->generateSocialContent($topic, $contentType, $length, $tone, $userId);
+        
+        // Include remaining requests in the response
+        $response = [
+            'content' => $content,
+            'remaining_requests' => $remainingRequests
+        ];
+        
+        echo json_encode($response);
     } catch (Exception $e) {
         http_response_code(500);
         echo json_encode(['error' => $e->getMessage()]);

@@ -17,6 +17,7 @@ require_once __DIR__ . '/../middleware/auth.php';
             <?php if (isAuthenticated()): ?>
                 <span class="user-info">Welcome, <?php echo htmlspecialchars($_SESSION['username']); ?>!</span>
                 <a href="/dashboard">Dashboard</a>
+                <a href="/generate-content-ui">Generate Content</a>
                 <a href="/logout" class="logout-btn">Logout</a>
             <?php else: ?>
                 <a href="/login">Login</a>
