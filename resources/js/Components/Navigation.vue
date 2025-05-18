@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { usePage, router } from '@inertiajs/vue3';
+import { usePage } from '@inertiajs/vue3';
 import { Link } from '@inertiajs/vue3';
 import {
     Menu,
@@ -16,17 +16,21 @@ import {
     Bell,
     Search,
     User,
-    LogOut
+    LogOut,
+    Sun,
+    Moon
 } from 'lucide-vue-next';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import NavLink from '@/Components/NavLink.vue';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
+import { useTheme } from '@/Composables/useTheme';
 
 const showingNavigationDropdown = ref(false);
 const searchQuery = ref('');
 const page = usePage();
+const { isDark, toggleTheme } = useTheme();
 
 const navigation = computed(() => {
     const baseNav = [
@@ -78,6 +82,16 @@ const navigation = computed(() => {
 
                     <!-- Right Side Navigation -->
                     <div class="flex items-center gap-4">
+                        <!-- Theme Toggle -->
+                        <button 
+                            @click="toggleTheme"
+                            class="flex h-9 w-9 items-center justify-center rounded-lg border border-border-primary bg-background-primary text-gray-400 transition-colors hover:border-gray-700 hover:text-white"
+                            :title="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
+                        >
+                            <Sun v-if="isDark" class="h-5 w-5" />
+                            <Moon v-else class="h-5 w-5" />
+                        </button>
+
                         <!-- Create Post Button -->
                         <Link
                             :href="route('posts.create')"

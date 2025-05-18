@@ -8,7 +8,8 @@ import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 import { InertiaProgress } from '@inertiajs/progress';
 import Toast from 'vue-toastification';
 import 'vue-toastification/dist/index.css';
-import Components from '@/plugins/components';
+import Components from './plugins/components';
+import { useTheme } from './Composables/useTheme';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -25,11 +26,14 @@ createInertiaApp({
         // Core plugins
         app.use(plugin);
         app.use(ZiggyVue);
-
-        // Custom components
         app.use(Components);
 
-        // Toast notifications
+        // Initialize theme
+        const theme = useTheme();
+        theme.initTheme();
+        app.provide('theme', theme);
+
+        // Toast notifications with theme support
         app.use(Toast, {
             position: 'top-right',
             timeout: 3000,
@@ -46,7 +50,7 @@ createInertiaApp({
             transition: 'Vue-Toastification__bounce',
             maxToasts: 20,
             newestOnTop: true,
-            toastClassName: 'bg-background-secondary border border-border-primary text-white rounded-lg shadow-lg',
+            toastClassName: `bg-background-secondary border border-border-primary text-white rounded-lg shadow-lg dark:bg-gray-800 dark:border-gray-700`,
             bodyClassName: 'text-sm font-medium',
         });
 

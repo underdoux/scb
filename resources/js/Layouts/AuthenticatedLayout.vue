@@ -1,9 +1,12 @@
 <script setup>
 import Navigation from '@/Components/Navigation.vue';
+import { useTheme } from '@/Composables/useTheme';
+
+const { isDark } = useTheme();
 </script>
 
 <template>
-    <div class="min-h-screen bg-background-primary">
+    <div class="min-h-screen bg-white transition-colors duration-200 dark:bg-background-primary">
         <Navigation />
         
         <!-- Main Content -->
@@ -11,7 +14,7 @@ import Navigation from '@/Components/Navigation.vue';
             <!-- Page Content -->
             <main class="min-h-[calc(100vh-4rem)]">
                 <!-- Page Heading -->
-                <header v-if="$slots.header" class="border-b border-border-primary bg-background-secondary px-6 py-6">
+                <header v-if="$slots.header" class="border-b border-gray-200 bg-white transition-colors duration-200 dark:border-border-primary dark:bg-background-secondary px-6 py-6">
                     <div class="mx-auto max-w-7xl">
                         <slot name="header" />
                     </div>
