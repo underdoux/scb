@@ -69,6 +69,7 @@ class Kernel extends HttpKernel
         'social.connected' => \App\Http\Middleware\EnsureSocialAccountConnected::class,
         'social.tokens.valid' => \App\Http\Middleware\EnsureSocialTokensValid::class,
         'social.limits' => \App\Http\Middleware\CheckSocialPostingLimits::class,
+        'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
     ];
 
     /**

@@ -21,6 +21,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'is_admin',
+        'preferences',
     ];
 
     /**
@@ -41,6 +43,8 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'is_admin' => 'boolean',
+        'preferences' => 'array',
     ];
 
     /**
@@ -65,6 +69,14 @@ class User extends Authenticatable
     public function logs(): HasMany
     {
         return $this->hasMany(Log::class);
+    }
+
+    /**
+     * Check if the user is an admin
+     */
+    public function isAdmin(): bool
+    {
+        return $this->is_admin;
     }
 
     /**

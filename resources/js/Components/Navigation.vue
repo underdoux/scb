@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import {
     Bars3Icon,
@@ -14,6 +14,7 @@ import NavLink from '@/Components/NavLink.vue';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
 
 const showingNavigationDropdown = ref(false);
+const isAdmin = computed(() => $page.props.auth.user.is_admin);
 </script>
 
 <template>
@@ -52,6 +53,16 @@ const showingNavigationDropdown = ref(false);
                         <NavLink :href="route('logs.index')" :active="route().current('logs.*')">
                             Logs
                         </NavLink>
+
+                        <!-- Admin Links -->
+                        <template v-if="isAdmin">
+                            <NavLink :href="route('admin.users')" :active="route().current('admin.users')">
+                                Users
+                            </NavLink>
+                            <NavLink :href="route('admin.settings')" :active="route().current('admin.settings')">
+                                Settings
+                            </NavLink>
+                        </template>
                     </div>
                 </div>
 
@@ -119,6 +130,16 @@ const showingNavigationDropdown = ref(false);
                 <ResponsiveNavLink :href="route('logs.index')" :active="route().current('logs.*')">
                     Logs
                 </ResponsiveNavLink>
+
+                <!-- Responsive Admin Links -->
+                <template v-if="isAdmin">
+                    <ResponsiveNavLink :href="route('admin.users')" :active="route().current('admin.users')">
+                        Users
+                    </ResponsiveNavLink>
+                    <ResponsiveNavLink :href="route('admin.settings')" :active="route().current('admin.settings')">
+                        Settings
+                    </ResponsiveNavLink>
+                </template>
             </div>
 
             <!-- Responsive Settings Options -->
