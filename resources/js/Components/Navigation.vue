@@ -17,21 +17,22 @@ const showingNavigationDropdown = ref(false);
 </script>
 
 <template>
-    <nav class="bg-white border-b border-gray-100 dark:bg-gray-800 dark:border-gray-700">
+    <nav class="border-b border-gray-800 bg-[#0B0F1A]">
         <!-- Primary Navigation Menu -->
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
+        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div class="flex h-16 justify-between">
                 <!-- Left Side -->
                 <div class="flex">
                     <!-- Logo -->
-                    <div class="shrink-0 flex items-center">
-                        <Link :href="route('dashboard')">
-                            <ApplicationLogo class="block h-9 w-auto fill-current text-gray-800 dark:text-gray-200" />
+                    <div class="flex shrink-0 items-center">
+                        <Link :href="route('dashboard')" class="flex items-center gap-2">
+                            <ApplicationLogo />
+                            <span class="text-lg font-semibold text-white">Dashboard</span>
                         </Link>
                     </div>
 
                     <!-- Navigation Links -->
-                    <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex">
+                    <div class="hidden space-x-4 sm:-my-px sm:ml-10 sm:flex">
                         <NavLink :href="route('dashboard')" :active="route().current('dashboard')">
                             Dashboard
                         </NavLink>
@@ -55,25 +56,22 @@ const showingNavigationDropdown = ref(false);
                 </div>
 
                 <!-- Right Side -->
-                <div class="hidden sm:flex sm:items-center sm:ml-6">
+                <div class="hidden sm:ml-6 sm:flex sm:items-center">
                     <!-- Create Post Button -->
                     <Link :href="route('posts.create')"
-                        class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 active:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150 mr-4">
-                        <PlusIcon class="w-4 h-4 mr-1" />
+                        class="mr-4 inline-flex items-center rounded-lg border border-transparent bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition duration-150 ease-in-out hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#0B0F1A] active:bg-blue-800">
+                        <PlusIcon class="mr-1 h-4 w-4" />
                         Create Post
                     </Link>
 
                     <!-- Settings Dropdown -->
-                    <div class="ml-3 relative">
+                    <div class="relative ml-3">
                         <Dropdown align="right" width="48">
                             <template #trigger>
-                                <span class="inline-flex rounded-md">
-                                    <button type="button"
-                                        class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white dark:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300 focus:outline-none transition ease-in-out duration-150">
-                                        {{ $page.props.auth.user.name }}
-                                        <ChevronDownIcon class="ml-2 -mr-0.5 h-4 w-4" />
-                                    </button>
-                                </span>
+                                <button class="flex items-center gap-2 rounded-lg border border-gray-800 bg-[#020817] px-3 py-2 text-sm font-medium text-white transition-colors hover:border-gray-700">
+                                    {{ $page.props.auth.user.name }}
+                                    <ChevronDownIcon class="h-4 w-4" />
+                                </button>
                             </template>
 
                             <template #content>
@@ -91,7 +89,7 @@ const showingNavigationDropdown = ref(false);
                 <!-- Hamburger -->
                 <div class="-mr-2 flex items-center sm:hidden">
                     <button @click="showingNavigationDropdown = !showingNavigationDropdown"
-                        class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-900 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-900 focus:text-gray-500 dark:focus:text-gray-400 transition duration-150 ease-in-out">
+                        class="inline-flex items-center justify-center rounded-lg p-2 text-gray-400 transition duration-150 ease-in-out hover:bg-blue-600/10 hover:text-white focus:outline-none">
                         <Bars3Icon v-show="!showingNavigationDropdown" class="h-6 w-6" />
                         <XMarkIcon v-show="showingNavigationDropdown" class="h-6 w-6" />
                     </button>
@@ -101,7 +99,7 @@ const showingNavigationDropdown = ref(false);
 
         <!-- Responsive Navigation Menu -->
         <div :class="{ 'block': showingNavigationDropdown, 'hidden': !showingNavigationDropdown }" class="sm:hidden">
-            <div class="pt-2 pb-3 space-y-1">
+            <div class="space-y-1 px-4 pb-3 pt-2">
                 <ResponsiveNavLink :href="route('dashboard')" :active="route().current('dashboard')">
                     Dashboard
                 </ResponsiveNavLink>
@@ -124,17 +122,17 @@ const showingNavigationDropdown = ref(false);
             </div>
 
             <!-- Responsive Settings Options -->
-            <div class="pt-4 pb-1 border-t border-gray-200 dark:border-gray-600">
+            <div class="border-t border-gray-800 pb-1 pt-4">
                 <div class="px-4">
-                    <div class="font-medium text-base text-gray-800 dark:text-gray-200">
+                    <div class="text-base font-medium text-white">
                         {{ $page.props.auth.user.name }}
                     </div>
-                    <div class="font-medium text-sm text-gray-500">
+                    <div class="text-sm font-medium text-gray-400">
                         {{ $page.props.auth.user.email }}
                     </div>
                 </div>
 
-                <div class="mt-3 space-y-1">
+                <div class="mt-3 space-y-1 px-4">
                     <ResponsiveNavLink :href="route('profile.edit')">
                         Profile
                     </ResponsiveNavLink>
