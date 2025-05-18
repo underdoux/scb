@@ -1,19 +1,6 @@
 <?php
 
 return [
-
-    /*
-    |--------------------------------------------------------------------------
-    | Third Party Services
-    |--------------------------------------------------------------------------
-    |
-    | This file is for storing the credentials for third party services such
-    | as Mailgun, Postmark, AWS and more. This file provides the de facto
-    | location for this type of information, allowing packages to have
-    | a conventional file to locate the various service credentials.
-    |
-    */
-
     'mailgun' => [
         'domain' => env('MAILGUN_DOMAIN'),
         'secret' => env('MAILGUN_SECRET'),
@@ -33,41 +20,49 @@ return [
 
     'openai' => [
         'api_key' => env('OPENAI_API_KEY'),
+        'organization' => env('OPENAI_ORGANIZATION'),
+        'model' => env('OPENAI_MODEL', 'gpt-4'),
+        'temperature' => env('OPENAI_TEMPERATURE', 0.7),
+        'max_tokens' => env('OPENAI_MAX_TOKENS', 200),
     ],
 
     'facebook' => [
         'client_id' => env('FACEBOOK_CLIENT_ID'),
         'client_secret' => env('FACEBOOK_CLIENT_SECRET'),
-        'redirect' => env('FACEBOOK_REDIRECT_URI'),
+        'redirect' => env('APP_URL') . '/social-accounts/callback/facebook',
+        'default_graph_version' => 'v18.0',
+        'app_token' => env('FACEBOOK_APP_TOKEN'),
     ],
 
     'twitter' => [
         'client_id' => env('TWITTER_CLIENT_ID'),
         'client_secret' => env('TWITTER_CLIENT_SECRET'),
-        'redirect' => env('TWITTER_REDIRECT_URI'),
+        'redirect' => env('APP_URL') . '/social-accounts/callback/twitter',
+        'oauth2' => true, // Use OAuth 2.0
     ],
 
     'instagram' => [
         'client_id' => env('INSTAGRAM_CLIENT_ID'),
         'client_secret' => env('INSTAGRAM_CLIENT_SECRET'),
-        'redirect' => env('INSTAGRAM_REDIRECT_URI'),
+        'redirect' => env('APP_URL') . '/social-accounts/callback/instagram',
     ],
 
     'linkedin' => [
         'client_id' => env('LINKEDIN_CLIENT_ID'),
         'client_secret' => env('LINKEDIN_CLIENT_SECRET'),
-        'redirect' => env('LINKEDIN_REDIRECT_URI'),
+        'redirect' => env('APP_URL') . '/social-accounts/callback/linkedin',
     ],
 
     'tiktok' => [
-        'client_id' => env('TIKTOK_CLIENT_ID'),
+        'client_key' => env('TIKTOK_CLIENT_KEY'),
         'client_secret' => env('TIKTOK_CLIENT_SECRET'),
-        'redirect' => env('TIKTOK_REDIRECT_URI'),
+        'redirect' => env('APP_URL') . '/social-accounts/callback/tiktok',
     ],
 
-    'youtube' => [
-        'client_id' => env('YOUTUBE_CLIENT_ID'),
-        'client_secret' => env('YOUTUBE_CLIENT_SECRET'),
-        'redirect' => env('YOUTUBE_REDIRECT_URI'),
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('APP_URL') . '/social-accounts/callback/youtube',
+        'developer_key' => env('GOOGLE_DEVELOPER_KEY'),
     ],
 ];

@@ -13,78 +13,48 @@ class CleanupLogs extends Command
      *
      * @var string
      */
-    protected $signature = 'logs:cleanup {--days=30 : Number of days to keep logs} {--type= : Specific type of logs to clean}';
+    protected $signature = 'social:cleanup-logs {--days=30 : Number of days to keep logs}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Clean up old logs from the database';
+    protected $description = 'Clean up old log entries from the database';
 
     /**
      * Execute the console command.
      */
-    public function handle(): int
+    public function handle()
     {
         $days = $this->option('days');
-        $type = $this->option('type');
-
-        $this->info("Starting logs cleanup...");
-        $this->info("Keeping logs from the last {$days} days" . ($type ? " for type: {$type}" : ""));
+        $this->info("Cleaning up logs older than {$days} days...");
 
         try {
+            // Begin transaction
             DB::beginTransaction();
 
-            $query = Log::where('created_at', '<', now()->subDays($days));
+            // Get count of logs to be deleted
+            $count = Log::where('created_at', '<', now()->subDays($days))->count();
 
-            if ($type) {
-                $query->where('type', $type);
-            }
+            // Delete old logs
+            Log::where('created_at', '<', now()->subDays($days))->delete();
 
-            $count = $query->count();
-            
-            if ($count === 0) {
-                $this->info("No logs found to clean up.");
-                return Command::SUCCESS;
-            }
-
-            // Delete in chunks to prevent memory issues
-            $query->chunkById(1000, function ($logs) {
-                foreach ($logs as $log) {
-                    $log->delete();
-                }
-            });
-
+            // Commit transaction
             DB::commit();
 
-            $this->info("Successfully deleted {$count} logs.");
+            $this->info("Successfully deleted {$count} log entries.");
+            
+            // Get remaining logs count
+            $remaining = Log::count();
+            $this->line("Remaining logs in database: {$remaining}");
 
-            // Create a new log entry for this cleanup
-            Log::info(
-                'Logs cleanup completed',
-                [
-                    'deleted_count' => $count,
-                    'days_kept' => $days,
-                    'type' => $type ?? 'all'
-                ]
-            );
-
-            return Command::SUCCESS;
         } catch (\Exception $e) {
             DB::rollBack();
-
-            Log::error(
-                'Failed to cleanup logs',
-                [
-                    'error' => $e->getMessage(),
-                    'days' => $days,
-                    'type' => $type
-                ]
-            );
-
             $this->error("Failed to cleanup logs: " . $e->getMessage());
-            return Command::FAILURE;
+            return 1;
         }
+
+        return 0;
     }
 }

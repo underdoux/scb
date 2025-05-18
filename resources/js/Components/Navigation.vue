@@ -1,13 +1,14 @@
 <template>
     <nav class="bg-white border-b border-gray-100">
+        <!-- Primary Navigation Menu -->
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
+                <!-- Left Side -->
                 <div class="flex">
                     <!-- Logo -->
                     <div class="shrink-0 flex items-center">
-                        <Link :href="route('dashboard')" class="flex items-center">
-                            <span class="text-xl font-bold text-gray-900">SMB</span>
-                            <span class="ml-2 text-sm text-gray-600 hidden sm:inline-block">Social Media Booster</span>
+                        <Link :href="route('dashboard')">
+                            <ApplicationLogo class="block h-9 w-auto" />
                         </Link>
                     </div>
 
@@ -16,45 +17,43 @@
                         <NavLink :href="route('dashboard')" :active="route().current('dashboard')">
                             Dashboard
                         </NavLink>
+
                         <NavLink :href="route('posts.index')" :active="route().current('posts.*')">
                             Posts
                         </NavLink>
+
                         <NavLink :href="route('social-accounts.index')" :active="route().current('social-accounts.*')">
                             Social Accounts
                         </NavLink>
+
                         <NavLink :href="route('analytics.index')" :active="route().current('analytics.*')">
                             Analytics
                         </NavLink>
+
                         <NavLink :href="route('logs.index')" :active="route().current('logs.*')">
-                            Activity Logs
+                            Logs
                         </NavLink>
                     </div>
                 </div>
 
-                <!-- Settings Dropdown -->
+                <!-- Right Side -->
                 <div class="hidden sm:flex sm:items-center sm:ml-6">
+                    <!-- Create Post Button -->
+                    <Link :href="route('posts.create')"
+                        class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-500 active:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150 mr-4">
+                        <PlusIcon class="w-4 h-4 mr-1" />
+                        Create Post
+                    </Link>
+
+                    <!-- Settings Dropdown -->
                     <div class="ml-3 relative">
                         <Dropdown align="right" width="48">
                             <template #trigger>
                                 <span class="inline-flex rounded-md">
-                                    <button
-                                        type="button"
-                                        class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none transition ease-in-out duration-150"
-                                    >
+                                    <button type="button"
+                                        class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none transition ease-in-out duration-150">
                                         {{ $page.props.auth.user.name }}
-
-                                        <svg
-                                            class="ml-2 -mr-0.5 h-4 w-4"
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            viewBox="0 0 20 20"
-                                            fill="currentColor"
-                                        >
-                                            <path
-                                                fill-rule="evenodd"
-                                                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                                                clip-rule="evenodd"
-                                            />
-                                        </svg>
+                                        <ChevronDownIcon class="ml-2 -mr-0.5 h-4 w-4" />
                                     </button>
                                 </span>
                             </template>
@@ -73,26 +72,10 @@
 
                 <!-- Hamburger -->
                 <div class="-mr-2 flex items-center sm:hidden">
-                    <button
-                        @click="showingNavigationDropdown = !showingNavigationDropdown"
-                        class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:bg-gray-100 focus:text-gray-500 transition duration-150 ease-in-out"
-                    >
-                        <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
-                            <path
-                                :class="{ 'hidden': showingNavigationDropdown, 'inline-flex': !showingNavigationDropdown }"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M4 6h16M4 12h16M4 18h16"
-                            />
-                            <path
-                                :class="{ 'hidden': !showingNavigationDropdown, 'inline-flex': showingNavigationDropdown }"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M6 18L18 6M6 6l12 12"
-                            />
-                        </svg>
+                    <button @click="showingNavigationDropdown = !showingNavigationDropdown"
+                        class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:bg-gray-100 focus:text-gray-500 transition duration-150 ease-in-out">
+                        <Bars3Icon v-show="!showingNavigationDropdown" class="h-6 w-6" />
+                        <XMarkIcon v-show="showingNavigationDropdown" class="h-6 w-6" />
                     </button>
                 </div>
             </div>
@@ -104,17 +87,21 @@
                 <ResponsiveNavLink :href="route('dashboard')" :active="route().current('dashboard')">
                     Dashboard
                 </ResponsiveNavLink>
+
                 <ResponsiveNavLink :href="route('posts.index')" :active="route().current('posts.*')">
                     Posts
                 </ResponsiveNavLink>
+
                 <ResponsiveNavLink :href="route('social-accounts.index')" :active="route().current('social-accounts.*')">
                     Social Accounts
                 </ResponsiveNavLink>
+
                 <ResponsiveNavLink :href="route('analytics.index')" :active="route().current('analytics.*')">
                     Analytics
                 </ResponsiveNavLink>
+
                 <ResponsiveNavLink :href="route('logs.index')" :active="route().current('logs.*')">
-                    Activity Logs
+                    Logs
                 </ResponsiveNavLink>
             </div>
 
@@ -145,10 +132,17 @@
 <script setup>
 import { ref } from 'vue';
 import { Link } from '@inertiajs/vue3';
-import Dropdown from './Dropdown.vue';
-import DropdownLink from './DropdownLink.vue';
-import NavLink from './NavLink.vue';
-import ResponsiveNavLink from './ResponsiveNavLink.vue';
+import {
+    Bars3Icon,
+    XMarkIcon,
+    PlusIcon,
+    ChevronDownIcon,
+} from '@heroicons/vue/24/outline';
+import ApplicationLogo from '@/Components/ApplicationLogo.vue';
+import Dropdown from '@/Components/Dropdown.vue';
+import DropdownLink from '@/Components/DropdownLink.vue';
+import NavLink from '@/Components/NavLink.vue';
+import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
 
 const showingNavigationDropdown = ref(false);
 </script>

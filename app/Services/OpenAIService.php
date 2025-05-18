@@ -2,159 +2,234 @@
 
 namespace App\Services;
 
-use OpenAI\Client;
 use App\Models\Log;
+use Illuminate\Support\Facades\Http;
 use Exception;
 
 class OpenAIService
 {
-    private Client $client;
+    protected string $apiKey;
+    protected string $model;
+    protected float $temperature;
+    protected int $maxTokens;
+    protected string $baseUrl = 'https://api.openai.com/v1';
 
-    public function __construct(Client $client)
+    public function __construct()
     {
-        $this->client = $client;
+        $this->apiKey = config('services.openai.api_key');
+        $this->model = config('services.openai.model', 'gpt-4');
+        $this->temperature = (float) config('services.openai.temperature', 0.7);
+        $this->maxTokens = (int) config('services.openai.max_tokens', 200);
     }
 
     /**
-     * Generate social media content based on a prompt
+     * Generate social media post content
      */
-    public function generateContent(string $prompt, ?int $userId = null): array
+    public function generatePost(string $topic, string $platform, array $options = []): array
     {
         try {
-            $response = $this->client->chat()->create([
-                'model' => 'gpt-3.5-turbo',
+            $prompt = $this->buildPrompt($topic, $platform, $options);
+            
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $this->apiKey,
+                'Content-Type' => 'application/json',
+            ])->post("{$this->baseUrl}/chat/completions", [
+                'model' => $this->model,
                 'messages' => [
                     [
                         'role' => 'system',
-                        'content' => 'You are a professional social media content creator. Create engaging, platform-appropriate content.'
+                        'content' => $this->getSystemPrompt($platform),
                     ],
                     [
                         'role' => 'user',
-                        'content' => $prompt
-                    ]
+                        'content' => $prompt,
+                    ],
                 ],
-                'temperature' => 0.7,
-                'max_tokens' => 200,
+                'temperature' => $this->temperature,
+                'max_tokens' => $this->maxTokens,
             ]);
 
-            $content = $response->choices[0]->message->content;
+            if (!$response->successful()) {
+                throw new Exception('OpenAI API request failed: ' . $response->body());
+            }
 
-            // Log success
-            Log::success(
-                'Content generated successfully',
-                ['prompt' => $prompt],
-                $userId
-            );
+            $result = $response->json();
+            $content = $result['choices'][0]['message']['content'] ?? null;
 
-            // Parse content and hashtags
-            $parts = $this->parseContent($content);
+            if (!$content) {
+                throw new Exception('No content generated');
+            }
 
-            return [
-                'success' => true,
-                'content' => $parts['content'],
-                'hashtags' => $parts['hashtags'],
-                'raw_response' => $content
-            ];
+            // Parse the response into structured data
+            return $this->parseResponse($content, $platform);
+
         } catch (Exception $e) {
-            // Log error
             Log::error(
-                'Failed to generate content',
+                'Failed to generate content with OpenAI',
                 [
-                    'prompt' => $prompt,
-                    'error' => $e->getMessage()
-                ],
-                $userId
+                    'topic' => $topic,
+                    'platform' => $platform,
+                    'error' => $e->getMessage(),
+                ]
             );
 
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
+            throw $e;
         }
     }
 
     /**
-     * Parse the generated content to separate main content and hashtags
+     * Build the prompt for content generation
      */
-    private function parseContent(string $content): array
+    protected function buildPrompt(string $topic, string $platform, array $options): string
     {
-        // Split content by hashtag indicator
-        $parts = explode('#', $content, 2);
+        $toneOptions = [
+            'professional' => 'Use a professional and formal tone',
+            'casual' => 'Use a casual and friendly tone',
+            'humorous' => 'Include humor and keep it light-hearted',
+            'informative' => 'Focus on providing valuable information',
+            'promotional' => 'Create engaging promotional content',
+        ];
 
-        if (count($parts) === 1) {
-            return [
-                'content' => trim($parts[0]),
-                'hashtags' => ''
-            ];
+        $tone = $options['tone'] ?? 'professional';
+        $includeHashtags = $options['include_hashtags'] ?? true;
+        $includeEmoji = $options['include_emoji'] ?? true;
+        $callToAction = $options['call_to_action'] ?? true;
+
+        $prompt = "Create a {$platform} post about: {$topic}\n\n";
+        $prompt .= "Requirements:\n";
+        $prompt .= "- {$toneOptions[$tone]}\n";
+        $prompt .= "- Stay within {$platform}'s character limits\n";
+        
+        if ($includeHashtags) {
+            $prompt .= "- Include relevant hashtags\n";
+        }
+        
+        if ($includeEmoji) {
+            $prompt .= "- Include appropriate emojis\n";
+        }
+        
+        if ($callToAction) {
+            $prompt .= "- Include a compelling call-to-action\n";
         }
 
-        return [
-            'content' => trim($parts[0]),
-            'hashtags' => '#' . trim($parts[1])
-        ];
+        $prompt .= "\nFormat the response as JSON with these fields:\n";
+        $prompt .= "- content: The main post content\n";
+        $prompt .= "- hashtags: Array of hashtags (if included)\n";
+        $prompt .= "- cta: The call-to-action used (if included)\n";
+
+        return $prompt;
     }
 
     /**
-     * Generate variations of the content
+     * Get platform-specific system prompt
      */
-    public function generateVariations(string $content, int $count = 3, ?int $userId = null): array
+    protected function getSystemPrompt(string $platform): string
+    {
+        $basePrompt = "You are a social media content expert specializing in {$platform}. ";
+        
+        return $basePrompt . match ($platform) {
+            'facebook' => "Create engaging content that encourages discussion and sharing. Max length: 63,206 characters.",
+            'twitter' => "Create concise, impactful content. Max length: 280 characters.",
+            'instagram' => "Create visually descriptive content with emotional appeal. Max length: 2,200 characters.",
+            'linkedin' => "Create professional content that demonstrates expertise. Max length: 3,000 characters.",
+            'tiktok' => "Create trendy, attention-grabbing content. Max length: 2,200 characters.",
+            'youtube' => "Create descriptive content optimized for video. Max length: 5,000 characters.",
+            default => "Create platform-appropriate social media content.",
+        };
+    }
+
+    /**
+     * Parse the AI response into structured data
+     */
+    protected function parseResponse(string $content, string $platform): array
     {
         try {
-            $response = $this->client->chat()->create([
-                'model' => 'gpt-3.5-turbo',
+            // Try to parse as JSON first
+            $data = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
+            
+            // Validate required fields
+            if (!isset($data['content'])) {
+                throw new Exception('Response missing required content field');
+            }
+
+            return [
+                'content' => $data['content'],
+                'hashtags' => $data['hashtags'] ?? [],
+                'cta' => $data['cta'] ?? null,
+                'platform' => $platform,
+                'raw_response' => $content,
+            ];
+
+        } catch (Exception $e) {
+            // If JSON parsing fails, try to extract content directly
+            return [
+                'content' => $content,
+                'hashtags' => [],
+                'cta' => null,
+                'platform' => $platform,
+                'raw_response' => $content,
+            ];
+        }
+    }
+
+    /**
+     * Generate variations of a post
+     */
+    public function generateVariations(string $content, string $platform, int $count = 3): array
+    {
+        $prompt = "Generate {$count} variations of this {$platform} post:\n\n{$content}\n\n";
+        $prompt .= "Keep the same message but vary the wording and style. Format as JSON array of variations.";
+
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $this->apiKey,
+                'Content-Type' => 'application/json',
+            ])->post("{$this->baseUrl}/chat/completions", [
+                'model' => $this->model,
                 'messages' => [
                     [
                         'role' => 'system',
-                        'content' => "You are a professional social media content creator. Create {$count} variations of the given content while maintaining the same message and tone."
+                        'content' => "You are a social media content expert. Generate creative variations while maintaining the core message.",
                     ],
                     [
                         'role' => 'user',
-                        'content' => $content
-                    ]
+                        'content' => $prompt,
+                    ],
                 ],
-                'temperature' => 0.8,
-                'max_tokens' => 300,
+                'temperature' => 0.8, // Slightly higher for more variation
+                'max_tokens' => $this->maxTokens * $count,
             ]);
 
-            $variations = $response->choices[0]->message->content;
+            if (!$response->successful()) {
+                throw new Exception('OpenAI API request failed: ' . $response->body());
+            }
 
-            // Log success
-            Log::success(
-                'Content variations generated successfully',
-                ['original_content' => $content],
-                $userId
-            );
+            $result = $response->json();
+            $content = $result['choices'][0]['message']['content'] ?? null;
 
-            return [
-                'success' => true,
-                'variations' => $this->parseVariations($variations),
-                'raw_response' => $variations
-            ];
+            if (!$content) {
+                throw new Exception('No variations generated');
+            }
+
+            // Parse variations
+            $variations = json_decode($content, true);
+            if (!is_array($variations)) {
+                $variations = [$content];
+            }
+
+            return array_map(fn($variation) => is_array($variation) ? $variation['content'] : $variation, $variations);
+
         } catch (Exception $e) {
-            // Log error
             Log::error(
                 'Failed to generate content variations',
                 [
                     'original_content' => $content,
-                    'error' => $e->getMessage()
-                ],
-                $userId
+                    'platform' => $platform,
+                    'error' => $e->getMessage(),
+                ]
             );
 
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
+            throw $e;
         }
-    }
-
-    /**
-     * Parse the generated variations into an array
-     */
-    private function parseVariations(string $variations): array
-    {
-        // Split by numbered lines (1., 2., 3., etc.)
-        $lines = preg_split('/\d+\.\s+/', $variations, -1, PREG_SPLIT_NO_EMPTY);
-        return array_map('trim', $lines);
     }
 }

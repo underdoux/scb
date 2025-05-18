@@ -2,219 +2,218 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Log;
 use App\Models\SocialAccount;
+use App\Models\Log;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Http;
 use Inertia\Inertia;
-use Laravel\Socialite\Facades\Socialite;
 
 class SocialAccountController extends Controller
 {
     /**
-     * Display a listing of connected social accounts
+     * Display a listing of the user's social media accounts.
      */
     public function index()
     {
         $accounts = Auth::user()->socialAccounts()
+            ->orderBy('platform')
             ->get()
             ->map(function ($account) {
                 return [
                     'id' => $account->id,
                     'platform' => $account->platform,
                     'platform_username' => $account->platform_username,
-                    'connected_at' => $account->created_at->diffForHumans(),
-                    'token_expires_at' => $account->token_expires_at?->diffForHumans(),
+                    'connected_at' => $account->created_at,
+                    'updated_at' => $account->updated_at,
+                    'token_expires_at' => $account->token_expires_at,
+                    'status' => $this->getAccountStatus($account),
                 ];
             });
 
         return Inertia::render('SocialAccounts/Index', [
             'accounts' => $accounts,
-            'availablePlatforms' => [
+            'platforms' => [
                 'facebook' => [
                     'name' => 'Facebook',
-                    'connected' => Auth::user()->hasPlatformConnected('facebook'),
-                ],
-                'instagram' => [
-                    'name' => 'Instagram',
-                    'connected' => Auth::user()->hasPlatformConnected('instagram'),
+                    'description' => 'Share posts to your Facebook pages',
+                    'features' => ['Text posts', 'Images', 'Videos', 'Links'],
+                    'limits' => [
+                        'text' => '63,206 characters',
+                        'images' => 'Up to 10 images per post',
+                        'video' => 'Up to 240 minutes',
+                    ],
                 ],
                 'twitter' => [
                     'name' => 'Twitter',
-                    'connected' => Auth::user()->hasPlatformConnected('twitter'),
+                    'description' => 'Share tweets to your Twitter profile',
+                    'features' => ['Text posts', 'Images', 'Videos', 'Links'],
+                    'limits' => [
+                        'text' => '280 characters',
+                        'images' => 'Up to 4 images per tweet',
+                        'video' => 'Up to 140 seconds',
+                    ],
+                ],
+                'instagram' => [
+                    'name' => 'Instagram',
+                    'description' => 'Share photos and videos to Instagram',
+                    'features' => ['Images', 'Videos', 'Stories', 'Reels'],
+                    'limits' => [
+                        'caption' => '2,200 characters',
+                        'images' => 'Up to 10 images per post',
+                        'video' => 'Up to 60 minutes',
+                    ],
                 ],
                 'linkedin' => [
                     'name' => 'LinkedIn',
-                    'connected' => Auth::user()->hasPlatformConnected('linkedin'),
+                    'description' => 'Share professional updates to LinkedIn',
+                    'features' => ['Text posts', 'Images', 'Videos', 'Articles'],
+                    'limits' => [
+                        'text' => '3,000 characters',
+                        'images' => 'Up to 9 images per post',
+                        'video' => 'Up to 10 minutes',
+                    ],
                 ],
                 'tiktok' => [
                     'name' => 'TikTok',
-                    'connected' => Auth::user()->hasPlatformConnected('tiktok'),
+                    'description' => 'Share short-form videos to TikTok',
+                    'features' => ['Videos', 'Duets', 'Stitches'],
+                    'limits' => [
+                        'caption' => '2,200 characters',
+                        'video' => 'Up to 10 minutes',
+                    ],
                 ],
                 'youtube' => [
                     'name' => 'YouTube',
-                    'connected' => Auth::user()->hasPlatformConnected('youtube'),
+                    'description' => 'Share videos to YouTube',
+                    'features' => ['Videos', 'Shorts', 'Live streams'],
+                    'limits' => [
+                        'title' => '100 characters',
+                        'description' => '5,000 characters',
+                        'video' => 'No length limit',
+                    ],
                 ],
             ],
         ]);
     }
 
     /**
-     * Redirect to OAuth provider
+     * Get the current status of a social media account
      */
-    public function redirect(string $platform)
+    protected function getAccountStatus(SocialAccount $account): array
     {
-        if (!in_array($platform, ['facebook', 'instagram', 'twitter', 'linkedin', 'tiktok', 'youtube'])) {
-            return redirect()->route('social-accounts.index')
-                ->with('error', 'Invalid platform selected.');
-        }
+        $status = [
+            'connected' => true,
+            'expires_soon' => false,
+            'expired' => false,
+            'message' => 'Connected',
+            'class' => 'success',
+        ];
 
-        try {
-            return Socialite::driver($platform)
-                ->scopes($this->getPlatformScopes($platform))
-                ->redirect();
-        } catch (\Exception $e) {
-            Log::error(
-                "Failed to redirect to {$platform} OAuth",
-                ['error' => $e->getMessage()],
-                Auth::id()
-            );
+        // Check if token is expired or expiring soon
+        if ($account->token_expires_at) {
+            $now = now();
+            $expiresAt = $account->token_expires_at;
 
-            return redirect()->route('social-accounts.index')
-                ->with('error', "Failed to connect to {$platform}.");
-        }
-    }
-
-    /**
-     * Handle OAuth callback
-     */
-    public function callback(string $platform)
-    {
-        try {
-            $socialUser = Socialite::driver($platform)->user();
-
-            $account = SocialAccount::updateOrCreate(
-                [
-                    'user_id' => Auth::id(),
-                    'platform' => $platform,
-                    'platform_user_id' => $socialUser->getId(),
-                ],
-                [
-                    'platform_username' => $socialUser->getNickname() ?? $socialUser->getName(),
-                    'access_token' => $socialUser->token,
-                    'refresh_token' => $socialUser->refreshToken,
-                    'token_expires_at' => isset($socialUser->expiresIn) 
-                        ? now()->addSeconds($socialUser->expiresIn)
-                        : null,
-                ]
-            );
-
-            Log::success(
-                "{$platform} account connected successfully",
-                ['platform_username' => $account->platform_username],
-                Auth::id()
-            );
-
-            return redirect()->route('social-accounts.index')
-                ->with('success', "{$platform} account connected successfully.");
-        } catch (\Exception $e) {
-            Log::error(
-                "Failed to connect {$platform} account",
-                ['error' => $e->getMessage()],
-                Auth::id()
-            );
-
-            return redirect()->route('social-accounts.index')
-                ->with('error', "Failed to connect {$platform} account.");
-        }
-    }
-
-    /**
-     * Disconnect a social media account
-     */
-    public function disconnect(string $platform)
-    {
-        try {
-            $account = Auth::user()->socialAccounts()
-                ->where('platform', $platform)
-                ->first();
-
-            if (!$account) {
-                return redirect()->route('social-accounts.index')
-                    ->with('error', "{$platform} account not found.");
+            if ($expiresAt->isPast()) {
+                $status['expired'] = true;
+                $status['message'] = 'Token expired';
+                $status['class'] = 'error';
+            } elseif ($expiresAt->diffInHours($now) < 24) {
+                $status['expires_soon'] = true;
+                $status['message'] = 'Token expires soon';
+                $status['class'] = 'warning';
             }
+        }
 
-            // Attempt to revoke access token if platform supports it
-            $this->revokeAccessToken($platform, $account);
+        // Check last successful post
+        $lastPost = $account->user->posts()
+            ->where('platform', $account->platform)
+            ->where('status', 'published')
+            ->latest('published_at')
+            ->first();
 
-            $account->delete();
+        if ($lastPost) {
+            $status['last_post'] = [
+                'date' => $lastPost->published_at,
+                'success' => true,
+            ];
+        }
+
+        // Check for recent errors
+        $recentError = Log::where('user_id', $account->user_id)
+            ->where('type', 'error')
+            ->where('context->platform', $account->platform)
+            ->latest()
+            ->first();
+
+        if ($recentError && $recentError->created_at->diffInHours(now()) < 24) {
+            $status['has_error'] = true;
+            $status['error_message'] = $recentError->message;
+        }
+
+        return $status;
+    }
+
+    /**
+     * Display the specified social media account.
+     */
+    public function show(SocialAccount $account)
+    {
+        $this->authorize('view', $account);
+
+        // Get account details from the platform
+        try {
+            $service = app('social-media')->platform($account->platform);
+            $platformDetails = $service->setAccount($account)->getAccountDetails();
+
+            return response()->json([
+                'account' => $account,
+                'platform_details' => $platformDetails,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Failed to fetch account details: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Update the specified social media account settings.
+     */
+    public function update(Request $request, SocialAccount $account)
+    {
+        $this->authorize('update', $account);
+
+        $validated = $request->validate([
+            'settings' => 'required|array',
+        ]);
+
+        try {
+            $account->update([
+                'settings' => array_merge($account->settings ?? [], $validated['settings']),
+            ]);
 
             Log::info(
-                "{$platform} account disconnected successfully",
-                ['platform_username' => $account->platform_username],
+                'Account settings updated successfully',
+                [
+                    'platform' => $account->platform,
+                    'settings' => $validated['settings'],
+                ],
                 Auth::id()
             );
 
-            return redirect()->route('social-accounts.index')
-                ->with('success', "{$platform} account disconnected successfully.");
+            return back()->with('success', 'Account settings updated successfully');
         } catch (\Exception $e) {
             Log::error(
-                "Failed to disconnect {$platform} account",
-                ['error' => $e->getMessage()],
+                'Failed to update account settings',
+                [
+                    'platform' => $account->platform,
+                    'error' => $e->getMessage(),
+                ],
                 Auth::id()
             );
 
-            return redirect()->route('social-accounts.index')
-                ->with('error', "Failed to disconnect {$platform} account.");
-        }
-    }
-
-    /**
-     * Get required scopes for each platform
-     */
-    private function getPlatformScopes(string $platform): array
-    {
-        return match($platform) {
-            'facebook' => ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts'],
-            'instagram' => ['instagram_basic', 'instagram_content_publish'],
-            'twitter' => ['tweet.read', 'tweet.write', 'users.read'],
-            'linkedin' => ['r_liteprofile', 'w_member_social'],
-            'tiktok' => ['user.info.basic', 'video.publish'],
-            'youtube' => ['youtube.upload', 'youtube.readonly'],
-            default => [],
-        };
-    }
-
-    /**
-     * Attempt to revoke access token for platforms that support it
-     */
-    private function revokeAccessToken(string $platform, SocialAccount $account): void
-    {
-        try {
-            switch ($platform) {
-                case 'facebook':
-                case 'instagram':
-                    Http::delete("https://graph.facebook.com/v12.0/me/permissions", [
-                        'access_token' => $account->access_token,
-                    ]);
-                    break;
-
-                case 'twitter':
-                    Http::post('https://api.twitter.com/2/oauth2/revoke', [
-                        'token' => $account->access_token,
-                        'client_id' => config('services.twitter.client_id'),
-                    ]);
-                    break;
-
-                // Add other platform-specific token revocation logic here
-            }
-        } catch (\Exception $e) {
-            Log::warning(
-                "Failed to revoke {$platform} access token",
-                ['error' => $e->getMessage()],
-                Auth::id()
-            );
+            return back()->with('error', 'Failed to update account settings');
         }
     }
 }

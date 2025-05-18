@@ -8,36 +8,35 @@ use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 class Kernel extends ConsoleKernel
 {
     /**
-     * The Artisan commands provided by your application.
-     *
-     * @var array
-     */
-    protected $commands = [
-        Commands\ProcessScheduledPosts::class,
-    ];
-
-    /**
      * Define the application's command schedule.
      */
     protected function schedule(Schedule $schedule): void
     {
         // Process scheduled posts every minute
-        $schedule->command('posts:process-scheduled')
+        $schedule->command('social:process-scheduled-posts')
             ->everyMinute()
-            ->withoutOverlapping()
-            ->runInBackground();
+            ->withoutOverlapping();
 
-        // Clean up old logs every week
-        $schedule->command('logs:cleanup')
-            ->weekly()
-            ->sundays()
-            ->at('00:00')
-            ->runInBackground();
-
-        // Prune old failed jobs every day
-        $schedule->command('queue:prune-failed')
+        // Check and refresh social media tokens daily
+        $schedule->command('social:check-tokens')
             ->daily()
-            ->runInBackground();
+            ->withoutOverlapping();
+
+        // Clean up old logs weekly
+        $schedule->command('social:cleanup-logs')
+            ->weekly()
+            ->withoutOverlapping();
+
+        // Run queue worker health check every 5 minutes
+        $schedule->command('queue:check-workers')
+            ->everyFiveMinutes()
+            ->withoutOverlapping();
+
+        // Prune old job batches and failed jobs daily
+        $schedule->command('queue:prune-batches --hours=48')
+            ->daily();
+        $schedule->command('queue:prune-failed --hours=72')
+            ->daily();
     }
 
     /**

@@ -3,174 +3,191 @@
 namespace App\Services\SocialMedia;
 
 use App\Models\Post;
-use Exception;
 use Facebook\Facebook;
+use Facebook\Exceptions\FacebookSDKException;
+use Exception;
 
 class FacebookService extends BaseSocialMediaService
 {
-    private ?Facebook $client = null;
+    protected Facebook $fb;
 
-    /**
-     * Initialize Facebook client
-     */
-    private function initClient(): void
+    public function __construct()
     {
-        if (!$this->client) {
-            $this->client = new Facebook([
-                'app_id' => config('services.facebook.client_id'),
-                'app_secret' => config('services.facebook.client_secret'),
-                'default_graph_version' => 'v18.0',
-            ]);
-            
-            if ($this->account) {
-                $this->client->setDefaultAccessToken($this->account->access_token);
-            }
-        }
+        $this->fb = new Facebook([
+            'app_id' => config('services.facebook.client_id'),
+            'app_secret' => config('services.facebook.client_secret'),
+            'default_graph_version' => config('services.facebook.default_graph_version', 'v18.0'),
+        ]);
     }
 
     /**
-     * Publish a post to Facebook
-     */
-    public function publish(Post $post): array
-    {
-        try {
-            if (!$this->ensureValidToken()) {
-                throw new Exception('Failed to refresh Facebook token');
-            }
-
-            $this->initClient();
-
-            // Prepare content
-            $content = $post->content;
-            if ($post->hashtags) {
-                $content .= "\n\n" . $post->hashtags;
-            }
-
-            // Create the post
-            $response = $this->client->post('/' . $this->account->platform_user_id . '/feed', [
-                'message' => $content
-            ]);
-
-            $result = $response->getGraphNode();
-
-            if ($result && isset($result['id'])) {
-                $this->logSuccess(
-                    'Facebook post published successfully',
-                    ['post_id' => $result['id']],
-                    $post->user_id,
-                    $post->id
-                );
-
-                return $this->formatResponse(true, 'Post published successfully', [
-                    'post_id' => $result['id'],
-                    'post_url' => "https://facebook.com/{$result['id']}"
-                ]);
-            }
-
-            throw new Exception('Failed to publish post: ' . json_encode($result));
-        } catch (Exception $e) {
-            return $this->handleException($e, 'publish Facebook post', $post->user_id, $post->id);
-        }
-    }
-
-    /**
-     * Refresh the access token if needed
-     */
-    public function refreshTokenIfNeeded(): bool
-    {
-        try {
-            if (!$this->account->needsTokenRefresh()) {
-                return true;
-            }
-
-            $this->initClient();
-            
-            // Exchange the short-lived token for a long-lived one
-            $response = $this->client->get('/oauth/access_token', [
-                'grant_type' => 'fb_exchange_token',
-                'client_id' => config('services.facebook.client_id'),
-                'client_secret' => config('services.facebook.client_secret'),
-                'fb_exchange_token' => $this->account->access_token,
-            ]);
-
-            $result = $response->getGraphNode();
-
-            if (isset($result['access_token'])) {
-                $this->account->update([
-                    'access_token' => $result['access_token'],
-                    'token_expires_at' => now()->addSeconds($result['expires_in'] ?? 5184000), // Default to 60 days
-                ]);
-
-                $this->logInfo(
-                    'Facebook token refreshed successfully',
-                    [],
-                    $this->account->user_id
-                );
-
-                return true;
-            }
-
-            throw new Exception('Failed to refresh token: ' . json_encode($result));
-        } catch (Exception $e) {
-            $this->logError(
-                'Failed to refresh Facebook token',
-                ['error' => $e->getMessage()],
-                $this->account->user_id
-            );
-
-            return false;
-        }
-    }
-
-    /**
-     * Get account details from Facebook
+     * Get the account details from Facebook.
      */
     public function getAccountDetails(): array
     {
         try {
-            if (!$this->ensureValidToken()) {
-                throw new Exception('Failed to refresh Facebook token');
+            if (!$this->account) {
+                throw new Exception('No Facebook account set');
             }
 
-            $this->initClient();
+            $this->fb->setDefaultAccessToken($this->account->access_token);
 
-            $response = $this->client->get('/me?fields=id,name,accounts');
+            $response = $this->fb->get('/me?fields=id,name,picture');
             $user = $response->getGraphUser();
 
-            if ($user) {
-                $data = [
+            return [
+                'success' => true,
+                'data' => [
                     'id' => $user->getId(),
                     'name' => $user->getName(),
-                    'pages' => []
-                ];
-
-                // Get pages if available
-                $accounts = $user->getField('accounts');
-                if ($accounts) {
-                    foreach ($accounts as $account) {
-                        $data['pages'][] = [
-                            'id' => $account['id'],
-                            'name' => $account['name'],
-                            'access_token' => $account['access_token']
-                        ];
-                    }
-                }
-
-                return $this->formatResponse(true, 'Account details retrieved successfully', $data);
-            }
-
-            throw new Exception('Failed to get account details');
-        } catch (Exception $e) {
-            return $this->handleException($e, 'get Facebook account details', $this->account->user_id);
+                    'picture' => $user->getPicture()->getUrl(),
+                ],
+            ];
+        } catch (FacebookSDKException $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+            ];
         }
     }
 
     /**
-     * Validate post content for Facebook
+     * Publish a post to Facebook.
      */
-    public function validateContent(string $content): bool
+    public function publish(Post $post): array
     {
-        // Facebook's character limit is 63,206
-        return mb_strlen($content) <= 63206;
+        try {
+            if (!$this->account) {
+                throw new Exception('No Facebook account set');
+            }
+
+            // Validate content
+            $this->validateContent($post);
+
+            // Format content for Facebook
+            $data = $this->formatContent($post);
+
+            // Set access token
+            $this->fb->setDefaultAccessToken($this->account->access_token);
+
+            // Publish to Facebook
+            $response = $this->fb->post('/me/feed', $data);
+            $graphNode = $response->getGraphNode();
+
+            $postId = $graphNode->getField('id');
+            $postUrl = "https://facebook.com/{$postId}";
+
+            // Handle success
+            $this->handleSuccess($post, [
+                'post_id' => $postId,
+                'post_url' => $postUrl,
+            ]);
+
+            return [
+                'success' => true,
+                'data' => [
+                    'post_id' => $postId,
+                    'post_url' => $postUrl,
+                ],
+            ];
+
+        } catch (Exception $e) {
+            $this->handleError($post, $e);
+
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Refresh the Facebook access token.
+     */
+    protected function refreshToken(): array
+    {
+        try {
+            if (!$this->account || !$this->account->refresh_token) {
+                throw new Exception('No refresh token available');
+            }
+
+            $oauth2Client = $this->fb->getOAuth2Client();
+            
+            // Exchange refresh token for a new access token
+            $accessToken = $oauth2Client->getLongLivedAccessToken($this->account->refresh_token);
+
+            return [
+                'success' => true,
+                'data' => [
+                    'access_token' => $accessToken->getValue(),
+                    'expires_in' => $accessToken->getExpiresAt()->getTimestamp() - time(),
+                ],
+            ];
+
+        } catch (FacebookSDKException $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Validate post content for Facebook.
+     */
+    protected function validateContent(Post $post): void
+    {
+        $content = $post->content;
+        $maxLength = 63206; // Facebook's maximum character limit
+
+        if (empty($content)) {
+            throw new Exception('Post content cannot be empty');
+        }
+
+        if (mb_strlen($content) > $maxLength) {
+            throw new Exception("Content exceeds Facebook's maximum length of {$maxLength} characters");
+        }
+    }
+
+    /**
+     * Format post content for Facebook.
+     */
+    protected function formatContent(Post $post): array
+    {
+        $data = ['message' => $post->content];
+
+        // Add link if present
+        if (!empty($post->link)) {
+            $data['link'] = $post->link;
+        }
+
+        // Add media if present
+        if (!empty($post->media)) {
+            foreach ($post->media as $media) {
+                switch ($media['type']) {
+                    case 'image':
+                        // For images, we need to upload them first
+                        $photoResponse = $this->fb->post('/me/photos', [
+                            'source' => $this->fb->fileToUpload($media['path']),
+                            'published' => false,
+                        ]);
+                        $photo = $photoResponse->getGraphNode();
+                        $data['attached_media'][] = ['media_fbid' => $photo->getField('id')];
+                        break;
+
+                    case 'video':
+                        // For videos, we need to use a different endpoint
+                        $videoResponse = $this->fb->post('/me/videos', [
+                            'source' => $this->fb->videoToUpload($media['path']),
+                            'title' => $media['title'] ?? '',
+                            'description' => $post->content,
+                        ]);
+                        // Since video upload creates its own post, we don't need to proceed with the regular post
+                        return [];
+                }
+            }
+        }
+
+        return $data;
     }
 }

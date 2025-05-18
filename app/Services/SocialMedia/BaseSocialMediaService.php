@@ -2,17 +2,22 @@
 
 namespace App\Services\SocialMedia;
 
-use App\Models\Log;
 use App\Models\Post;
 use App\Models\SocialAccount;
+use App\Models\Log;
+use App\Notifications\PostStatusNotification;
+use Carbon\Carbon;
 use Exception;
 
 abstract class BaseSocialMediaService
 {
-    protected SocialAccount $account;
+    /**
+     * The social account instance.
+     */
+    protected ?SocialAccount $account = null;
 
     /**
-     * Set the social account to use
+     * Set the social account for operations.
      */
     public function setAccount(SocialAccount $account): self
     {
@@ -21,96 +26,162 @@ abstract class BaseSocialMediaService
     }
 
     /**
-     * Publish a post to the social media platform
-     */
-    abstract public function publish(Post $post): array;
-
-    /**
-     * Refresh the access token if needed
-     */
-    abstract public function refreshTokenIfNeeded(): bool;
-
-    /**
-     * Get account details from the platform
+     * Get the account details from the platform.
      */
     abstract public function getAccountDetails(): array;
 
     /**
-     * Validate post content for the platform
+     * Publish a post to the platform.
      */
-    abstract public function validateContent(string $content): bool;
+    abstract public function publish(Post $post): array;
 
     /**
-     * Log success message
+     * Check if the access token needs to be refreshed.
      */
-    protected function logSuccess(string $message, array $context = [], ?int $userId = null, ?int $postId = null): void
+    public function needsTokenRefresh(): bool
     {
-        Log::success($message, $context, $userId, $postId);
-    }
-
-    /**
-     * Log error message
-     */
-    protected function logError(string $message, array $context = [], ?int $userId = null, ?int $postId = null): void
-    {
-        Log::error($message, $context, $userId, $postId);
-    }
-
-    /**
-     * Log warning message
-     */
-    protected function logWarning(string $message, array $context = [], ?int $userId = null, ?int $postId = null): void
-    {
-        Log::warning($message, $context, $userId, $postId);
-    }
-
-    /**
-     * Log info message
-     */
-    protected function logInfo(string $message, array $context = [], ?int $userId = null, ?int $postId = null): void
-    {
-        Log::info($message, $context, $userId, $postId);
-    }
-
-    /**
-     * Format response array
-     */
-    protected function formatResponse(bool $success, string $message, array $data = []): array
-    {
-        return [
-            'success' => $success,
-            'message' => $message,
-            'data' => $data
-        ];
-    }
-
-    /**
-     * Handle API exceptions
-     */
-    protected function handleException(Exception $e, string $operation, ?int $userId = null, ?int $postId = null): array
-    {
-        $this->logError(
-            "Failed to {$operation}",
-            [
-                'error' => $e->getMessage(),
-                'platform' => $this->account->platform
-            ],
-            $userId,
-            $postId
-        );
-
-        return $this->formatResponse(false, $e->getMessage());
-    }
-
-    /**
-     * Check if token needs refresh and refresh if needed
-     */
-    protected function ensureValidToken(): bool
-    {
-        if ($this->account->needsTokenRefresh()) {
-            return $this->refreshTokenIfNeeded();
+        if (!$this->account) {
+            throw new Exception('No social account set');
         }
 
-        return true;
+        // If there's no expiration time, assume token is still valid
+        if (!$this->account->token_expires_at) {
+            return false;
+        }
+
+        // Check if token expires within the next hour
+        return $this->account->token_expires_at->subHour()->isPast();
+    }
+
+    /**
+     * Refresh the access token if needed.
+     */
+    public function refreshTokenIfNeeded(): bool
+    {
+        if (!$this->account) {
+            throw new Exception('No social account set');
+        }
+
+        try {
+            if ($this->needsTokenRefresh()) {
+                $result = $this->refreshToken();
+                
+                if ($result['success']) {
+                    $this->account->update([
+                        'access_token' => $result['data']['access_token'],
+                        'refresh_token' => $result['data']['refresh_token'] ?? $this->account->refresh_token,
+                        'token_expires_at' => isset($result['data']['expires_in']) 
+                            ? Carbon::now()->addSeconds($result['data']['expires_in'])
+                            : null,
+                    ]);
+
+                    Log::info(
+                        'Token refreshed successfully',
+                        [
+                            'platform' => $this->account->platform,
+                            'expires_at' => $this->account->token_expires_at,
+                        ],
+                        $this->account->user_id
+                    );
+
+                    return true;
+                }
+            }
+        } catch (Exception $e) {
+            Log::error(
+                'Failed to refresh token',
+                [
+                    'platform' => $this->account->platform,
+                    'error' => $e->getMessage(),
+                ],
+                $this->account->user_id
+            );
+
+            throw $e;
+        }
+
+        return false;
+    }
+
+    /**
+     * Refresh the access token.
+     */
+    abstract protected function refreshToken(): array;
+
+    /**
+     * Validate post content for the platform.
+     */
+    abstract protected function validateContent(Post $post): void;
+
+    /**
+     * Format post content for the platform.
+     */
+    abstract protected function formatContent(Post $post): array;
+
+    /**
+     * Handle successful post publishing.
+     */
+    protected function handleSuccess(Post $post, array $data): void
+    {
+        // Update post status
+        $post->update([
+            'status' => 'published',
+            'published_at' => now(),
+            'platform_post_id' => $data['post_id'] ?? null,
+        ]);
+
+        // Log success
+        Log::success(
+            'Post published successfully',
+            [
+                'platform' => $post->platform,
+                'post_url' => $data['post_url'] ?? null,
+            ],
+            $post->user_id,
+            $post->id
+        );
+
+        // Notify user
+        $post->user->notify(new PostStatusNotification(
+            $post,
+            'published',
+            'Your post has been successfully published!',
+            $data
+        ));
+    }
+
+    /**
+     * Handle post publishing failure.
+     */
+    protected function handleError(Post $post, Exception $e): void
+    {
+        // Log error
+        Log::error(
+            'Failed to publish post',
+            [
+                'platform' => $post->platform,
+                'error' => $e->getMessage(),
+            ],
+            $post->user_id,
+            $post->id
+        );
+
+        // Notify user
+        $post->user->notify(new PostStatusNotification(
+            $post,
+            'failed',
+            $e->getMessage()
+        ));
+
+        throw $e;
+    }
+
+    /**
+     * Get the platform name.
+     */
+    protected function getPlatformName(): string
+    {
+        $class = get_class($this);
+        return strtolower(str_replace(['App\\Services\\SocialMedia\\', 'Service'], '', $class));
     }
 }

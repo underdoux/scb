@@ -2,145 +2,63 @@
 
 namespace App\Services;
 
-use App\Models\Log;
+use App\Jobs\PublishSocialPost;
 use App\Models\Post;
 use App\Models\Schedule;
-use App\Services\SocialMedia\BaseSocialMediaService;
+use App\Models\Log;
+use Carbon\Carbon;
 use Exception;
-use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\DB;
 
 class SchedulerService
 {
     /**
-     * Schedule a post for future publishing
+     * Schedule a post for publishing
      */
-    public function schedulePost(Post $post, string $scheduledTime): Schedule
+    public function schedulePost(Post $post, Carbon $scheduledTime): Schedule
     {
-        $schedule = Schedule::create([
-            'post_id' => $post->id,
-            'scheduled_time' => $scheduledTime,
-            'status' => 'pending'
-        ]);
-
-        $post->update(['status' => 'scheduled']);
-
-        Log::info(
-            'Post scheduled successfully',
-            [
-                'scheduled_time' => $scheduledTime,
-                'platform' => $post->platform
-            ],
-            $post->user_id,
-            $post->id
-        );
-
-        return $schedule;
-    }
-
-    /**
-     * Process scheduled posts that are due
-     */
-    public function processScheduledPosts(): void
-    {
-        $schedules = Schedule::with(['post.user'])
-            ->where('status', 'pending')
-            ->where('scheduled_time', '<=', now())
-            ->get();
-
-        foreach ($schedules as $schedule) {
-            $this->processSchedule($schedule);
-        }
-    }
-
-    /**
-     * Process a single schedule
-     */
-    private function processSchedule(Schedule $schedule): void
-    {
-        $post = $schedule->post;
-
-        if (!$post) {
-            $schedule->update(['status' => 'failed']);
-            Log::error('Post not found for schedule', ['schedule_id' => $schedule->id]);
-            return;
-        }
-
         try {
-            $schedule->update(['status' => 'processing']);
+            DB::beginTransaction();
 
-            // Get the appropriate social media service
-            $service = $this->getSocialMediaService($post->platform);
-            
-            if (!$service) {
-                throw new Exception("Social media service not found for platform: {$post->platform}");
-            }
+            // Create schedule
+            $schedule = Schedule::create([
+                'post_id' => $post->id,
+                'scheduled_time' => $scheduledTime,
+                'status' => 'pending',
+            ]);
 
-            // Get the user's social account for this platform
-            $socialAccount = $post->user->getSocialAccount($post->platform);
-            
-            if (!$socialAccount) {
-                throw new Exception("Social account not found for platform: {$post->platform}");
-            }
+            // Update post status
+            $post->update(['status' => 'scheduled']);
 
-            // Set the account and publish
-            $result = $service->setAccount($socialAccount)->publish($post);
-
-            if (!$result['success']) {
-                throw new Exception($result['message']);
-            }
-
-            $schedule->update(['status' => 'completed']);
-            $post->update(['status' => 'published', 'published_at' => now()]);
-
-            Log::success(
-                'Post published successfully',
+            // Log the scheduling
+            Log::info(
+                'Post scheduled successfully',
                 [
+                    'scheduled_time' => $scheduledTime->toDateTimeString(),
                     'platform' => $post->platform,
-                    'scheduled_time' => $schedule->scheduled_time
                 ],
                 $post->user_id,
                 $post->id
             );
 
-        } catch (Exception $e) {
-            $schedule->incrementRetryCount();
-            
-            if ($schedule->shouldRetry()) {
-                $schedule->update(['status' => 'pending']);
-                Log::warning(
-                    'Post publishing failed, will retry',
-                    [
-                        'error' => $e->getMessage(),
-                        'retry_count' => $schedule->retry_count,
-                        'platform' => $post->platform
-                    ],
-                    $post->user_id,
-                    $post->id
-                );
-            } else {
-                $schedule->update(['status' => 'failed']);
-                $post->update(['status' => 'failed']);
-                Log::error(
-                    'Post publishing failed permanently',
-                    [
-                        'error' => $e->getMessage(),
-                        'platform' => $post->platform
-                    ],
-                    $post->user_id,
-                    $post->id
-                );
-            }
-        }
-    }
+            DB::commit();
 
-    /**
-     * Get the appropriate social media service for a platform
-     */
-    private function getSocialMediaService(string $platform): ?BaseSocialMediaService
-    {
-        $serviceClass = "App\\Services\\SocialMedia\\" . ucfirst($platform) . "Service";
-        
-        return class_exists($serviceClass) ? App::make($serviceClass) : null;
+            return $schedule;
+        } catch (Exception $e) {
+            DB::rollBack();
+            
+            Log::error(
+                'Failed to schedule post',
+                [
+                    'error' => $e->getMessage(),
+                    'platform' => $post->platform,
+                ],
+                $post->user_id,
+                $post->id
+            );
+
+            throw $e;
+        }
     }
 
     /**
@@ -149,34 +67,160 @@ class SchedulerService
     public function cancelSchedule(Schedule $schedule): bool
     {
         try {
-            $post = $schedule->post;
-            
-            $schedule->delete();
-            $post->update(['status' => 'draft']);
+            DB::beginTransaction();
 
+            // Update schedule status
+            $schedule->update(['status' => 'cancelled']);
+
+            // Update post status
+            $schedule->post->update(['status' => 'draft']);
+
+            // Log the cancellation
             Log::info(
                 'Schedule cancelled successfully',
                 [
                     'scheduled_time' => $schedule->scheduled_time,
-                    'platform' => $post->platform
+                    'platform' => $schedule->post->platform,
                 ],
-                $post->user_id,
-                $post->id
+                $schedule->post->user_id,
+                $schedule->post->id
             );
+
+            DB::commit();
 
             return true;
         } catch (Exception $e) {
+            DB::rollBack();
+            
             Log::error(
                 'Failed to cancel schedule',
                 [
                     'error' => $e->getMessage(),
-                    'schedule_id' => $schedule->id
+                    'platform' => $schedule->post->platform,
                 ],
-                $post->user_id ?? null,
-                $post->id ?? null
+                $schedule->post->user_id,
+                $schedule->post->id
             );
 
-            return false;
+            throw $e;
         }
+    }
+
+    /**
+     * Process a scheduled post
+     */
+    public function processSchedule(Schedule $schedule): void
+    {
+        try {
+            // Validate post exists and is in scheduled status
+            if (!$schedule->post || $schedule->post->status !== 'scheduled') {
+                throw new Exception('Invalid post status for scheduling');
+            }
+
+            // Dispatch job to publish post
+            PublishSocialPost::dispatch($schedule->post)
+                ->onQueue('social-posts');
+
+            // Update schedule status
+            $schedule->update(['status' => 'processed']);
+
+            // Log the processing
+            Log::info(
+                'Schedule processed successfully',
+                [
+                    'scheduled_time' => $schedule->scheduled_time,
+                    'platform' => $schedule->post->platform,
+                ],
+                $schedule->post->user_id,
+                $schedule->post->id
+            );
+
+        } catch (Exception $e) {
+            Log::error(
+                'Failed to process schedule',
+                [
+                    'error' => $e->getMessage(),
+                    'platform' => $schedule->post->platform ?? 'unknown',
+                ],
+                $schedule->post->user_id ?? null,
+                $schedule->post->id ?? null
+            );
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Get upcoming scheduled posts for a user
+     */
+    public function getUpcomingSchedules(int $userId, ?string $platform = null, int $limit = 10): array
+    {
+        $query = Schedule::with(['post'])
+            ->whereHas('post', function ($query) use ($userId, $platform) {
+                $query->where('user_id', $userId);
+                if ($platform) {
+                    $query->where('platform', $platform);
+                }
+            })
+            ->where('status', 'pending')
+            ->where('scheduled_time', '>', now())
+            ->orderBy('scheduled_time')
+            ->limit($limit);
+
+        return $query->get()->map(function ($schedule) {
+            return [
+                'id' => $schedule->id,
+                'post_id' => $schedule->post_id,
+                'platform' => $schedule->post->platform,
+                'content' => $schedule->post->content,
+                'scheduled_time' => $schedule->scheduled_time->toDateTimeString(),
+                'status' => $schedule->status,
+            ];
+        })->toArray();
+    }
+
+    /**
+     * Get processing statistics for a user
+     */
+    public function getStats(int $userId): array
+    {
+        $stats = [
+            'total_scheduled' => 0,
+            'pending' => 0,
+            'processed' => 0,
+            'failed' => 0,
+            'cancelled' => 0,
+            'by_platform' => [],
+        ];
+
+        // Get schedules for user's posts
+        $schedules = Schedule::whereHas('post', function ($query) use ($userId) {
+            $query->where('user_id', $userId);
+        })->get();
+
+        // Calculate totals
+        $stats['total_scheduled'] = $schedules->count();
+        $stats['pending'] = $schedules->where('status', 'pending')->count();
+        $stats['processed'] = $schedules->where('status', 'processed')->count();
+        $stats['failed'] = $schedules->where('status', 'failed')->count();
+        $stats['cancelled'] = $schedules->where('status', 'cancelled')->count();
+
+        // Calculate by platform
+        $schedules->each(function ($schedule) use (&$stats) {
+            $platform = $schedule->post->platform;
+            if (!isset($stats['by_platform'][$platform])) {
+                $stats['by_platform'][$platform] = [
+                    'total' => 0,
+                    'pending' => 0,
+                    'processed' => 0,
+                    'failed' => 0,
+                    'cancelled' => 0,
+                ];
+            }
+            $stats['by_platform'][$platform]['total']++;
+            $stats['by_platform'][$platform][$schedule->status]++;
+        });
+
+        return $stats;
     }
 }
