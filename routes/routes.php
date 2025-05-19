@@ -67,6 +67,18 @@ function routeRequest() {
             requireAuth();
             require_once __DIR__ . '/../views/generate_content.php';
             break;
+        case '/posts':
+            requireAuth();
+            require_once __DIR__ . '/../views/posts.php';
+            break;
+        case '/schedules':
+            requireAuth();
+            require_once __DIR__ . '/../views/schedules.php';
+            break;
+        case '/notifications':
+            requireAuth();
+            require_once __DIR__ . '/../views/notifications.php';
+            break;
 
         // OAuth Routes
         case '/oauth/facebook/login':

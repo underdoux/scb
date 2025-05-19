@@ -33,6 +33,9 @@ foreach ($platforms as $platform) {
             <a href="/">Home</a>
             <a href="/about">About</a>
             <a href="/generate-content-ui">Generate Content</a>
+            <a href="/posts">Manage Posts</a>
+            <a href="/schedules">Manage Schedules</a>
+            <a href="/notifications">Notifications</a>
             <?php if ($isUserAdmin): ?>
                 <a href="/admin/dashboard">Admin Dashboard</a>
             <?php endif; ?>
